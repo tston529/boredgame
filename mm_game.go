@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
+
 	"./engine"
 	"./util"
-	"fmt"
 	"github.com/eiannone/keyboard"
+
 	//"strconv"
 	"strings"
 	"time"
@@ -20,6 +22,8 @@ type player struct {
 type enemy struct {
 	engine.Actor
 }
+
+var paused = false
 
 func main() {
 	if err := keyboard.Open(); err != nil {
@@ -46,7 +50,7 @@ func main() {
 	playerActor := engine.Actor{Ascii: "P", X: 11, Y: 12, Passable: false}
 	player1 := player{3, 0, playerActor}
 	gameMap.AddActor(player1.Actor)
-	enemy1 := engine.Actor{Ascii: "E", X: 6, Y: 5, Passable: true}
+	enemy1 := engine.Actor{Ascii: "E", X: 5, Y: 6, Passable: true}
 	gameMap.AddActor(enemy1)
 
 	var exit = false
@@ -69,6 +73,9 @@ func main() {
 			case 'd':
 				validateMove(&gameMap, &player1, engine.Right)
 				break
+			case 'p':
+				togglePaused()
+				break
 			}
 			if key == keyboard.KeyEsc {
 				exit = true
@@ -77,22 +84,65 @@ func main() {
 		}
 	}()
 
+	go func() {
+		for {
+			for y := 0; y < len(gameMap); y++ {
+				for x := 0; x < len((gameMap)[0]); x++ {
+					gameMap[y][x].KeepOnTop()
+				}
+			}
+		}
+	}()
+
 	for !exit {
-		fmt.Printf("\x1b[0E\x1b7%s%s\x1b[2G\x1b[28A", gameMap, player1.Hud())
-		//fmt.Println(player1.Hud())
-		time.Sleep(100 * time.Millisecond)
+		if !paused {
+			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameMap, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+			//fmt.Println(player1.Hud())
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+func actorsOnTile(x int8, y int8, gm *engine.GameMap) string {
+	builder := strings.Builder{}
+	l := len((*gm)[y][x].Actors)
+	builder.WriteString("Actors on tile: [")
+	if l > 0 {
+		for x, a := range (*gm)[y][x].Actors {
+			builder.WriteString(fmt.Sprintf("'%s'", a.String()))
+			if x != l-1 {
+				builder.WriteString(", ")
+			}
+		}
+	}
+	builder.WriteString("]")
+	return builder.String()
+}
+
+func togglePaused() {
+	paused = !paused
+	if paused {
+		fmt.Printf("\x1b[s\x1b[11B\x1b[5C              \n\x1b[5C +==========+ \n\x1b[5C |  PAUSED  | \n\x1b[5C +==========+ \n\x1b[5C              ")
+	} else {
+		fmt.Printf("\x1b[u\x1b[2J")
 	}
 }
 
 func validateMove(gm *engine.GameMap, p *player, dir engine.Direction) {
+
+	if paused {
+		return
+	}
+
 	var startX int8 = (*p).Actor.X
 	var startY int8 = (*p).Actor.Y
+
+	var destX int8 = (*p).Actor.X
+	var destY int8 = (*p).Actor.Y
 
 	newCoord, err := gm.Move(&(*p).Actor, dir)
 	// If out of bounds, pac-man loop around
 	if err != nil {
-		var destX int8
-		var destY int8
 		switch dir {
 		case engine.Left:
 			destX = int8(len((*gm)[0]) - 1)
@@ -111,17 +161,18 @@ func validateMove(gm *engine.GameMap, p *player, dir engine.Direction) {
 			destY = 0
 			break
 		}
-		(*p).collision((*gm)[destY][destX].Actor)
-		(*p).Actor.SetCoords(destX, destY)
-		(*gm)[destY][destX].Actor = (*p).Actor
-		(*gm)[startY][startX].Actor = engine.Actor{}
 	} else {
-		(*p).collision((*gm)[newCoord.Y][newCoord.X].Actor)
-		if (*gm)[newCoord.Y][newCoord.X].Passable() {
-			(*p).Actor.SetCoords(newCoord.X, newCoord.Y)
-			(*gm)[newCoord.Y][newCoord.X].Actor = (*p).Actor
-			(*gm)[startY][startX].Actor = engine.Actor{}
-		}
+		destX = newCoord.X
+		destY = newCoord.Y
+	}
+
+	if len((*gm)[destY][destX].Actors) > 0 {
+		(*p).collision(&(*gm)[destY][destX].Actors[0])
+	}
+	if (*gm)[destY][destX].Passable() {
+		(*p).Actor.SetCoords(destX, destY)
+		(*gm).AddActor((*p).Actor)
+		(*gm)[startY][startX].Actors = (*gm)[startY][startX].Actors[1:]
 	}
 }
 
@@ -135,17 +186,22 @@ func populateBoard(gm *engine.GameMap) {
 			bg := (*gm)[y][x].Background
 			if bg == "." || bg == "@" {
 				(*gm)[y][x].Background = " "
-				(*gm)[y][x].Actor = engine.Actor{bg, int8(x), int8(y), true}
+				(*gm).AddActor(engine.Actor{Ascii: bg, X: int8(x), Y: int8(y), Passable: true})
 			} else if bg == " " {
-				(*gm)[y][x].Actor = engine.Actor{"", int8(x), int8(y), true}
+				(*gm).AddActor(engine.Actor{Ascii: "", X: int8(x), Y: int8(y), Passable: true})
 			}
 		}
 	}
 }
 
-func (p *player) collision(a engine.Actor) {
-	if a.Ascii == "." {
+func (p *player) collision(a *engine.Actor) {
+	if (*a).Ascii == "." {
 		(*p).score += 10
+		(*a).Ascii = ""
+	} else if (*a).Ascii == "E" {
+		if (*p).lives > 0 {
+			(*p).lives -= 1
+		}
 	}
 }
 
@@ -160,7 +216,7 @@ func (p *player) Hud() string {
 	}
 	builder.WriteString(util.FixedLengthString(13, fmt.Sprintf("| score: %d", (*p).score)))
 	builder.WriteString("  |\n+--------------------------------+\n")
-	builder.WriteString(fmt.Sprintf("[%s] (%d,%d)\n ", (*p).Ascii, (*p).Actor.X, (*p).Actor.Y))
+	builder.WriteString(fmt.Sprintf("[%s] (%d,%d) ", (*p).Ascii, (*p).Actor.X, (*p).Actor.Y))
 
 	return builder.String()
 }

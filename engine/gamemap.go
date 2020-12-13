@@ -40,7 +40,8 @@ func LoadMap(filename string, wallData map[string]bool) (GameMap, error) {
 		for i := 0; i < len(line); i++ {
 			tileAscii := string(line[i])
 			_, ok := wallData[tileAscii]
-			gameMap[currLine][i] = Tile{Background: tileAscii, passable: !ok}
+			tileActors := []Actor{}
+			gameMap[currLine][i] = Tile{Background: tileAscii, passable: !ok, Actors: tileActors}
 		}
 		currLine += 1
 	}
@@ -63,8 +64,12 @@ func (gm GameMap) String() (output string) {
 }
 
 func (gm GameMap) AddActor(a Actor) {
-	if gm[a.X][a.Y].String() == " " {
-		gm[a.X][a.Y].Actor = a
+	if len(gm[a.Y][a.X].Actors) != 0 {
+		gm[a.Y][a.X].Actors = append(gm[a.Y][a.X].Actors, Actor{})
+		copy(gm[a.Y][a.X].Actors[1:], gm[a.Y][a.X].Actors[0:])
+		gm[a.Y][a.X].Actors[0] = a
+	} else {
+		gm[a.Y][a.X].Actors = []Actor{a}
 	}
 }
 
