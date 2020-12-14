@@ -8,6 +8,7 @@ import (
 
 	"./engine"
 	"./util"
+	"./mm_render"
 	"github.com/eiannone/keyboard"
 
 	//"strconv"
@@ -35,7 +36,13 @@ var width int
 var height int
 
 func main() {
-	//mm_render.Client = mm_render.StartMattermostClient("https://localhost:8080")
+	/*mm_render.Client = mm_render.StartMattermostClient("<chat server>")
+	mm_render.UserLogin("<username>", "<password>")
+	mm_render.SetupGracefulShutdown()
+	channel, _ := mm_render.Client.CreateDirectChannel(mm_render.MyUser.Id, os.Args[1])
+	mm_render.PostMessage(mm_render.MyUser.Id, channel.Id, "Gamu Starto desu")*/
+
+	//os.Exit(0)
 
 	if err := keyboard.Open(); err != nil {
 		panic(err)
@@ -127,11 +134,11 @@ func main() {
 	for !exit {
 		if !paused {
 			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameMap, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
-			//fmt.Println(player1.Hud())
+			//mm_render.SendNextFrame(fmt.Sprintf("```\n%s%s\n```", gameMap, player1.Hud()))
 			time.Sleep(100 * time.Millisecond)
 		}
 		if player1.lives == 0 {
-			fmt.Printf("\x1b[u%s", gameOverString)
+			fmt.Printf("\x1b[u%s\x1b[u", gameOverString)
 			os.Exit(0)
 		}
 	}

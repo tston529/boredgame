@@ -31,7 +31,7 @@ func LoadMap(filename string, wallData map[string]bool) (GameMap, error) {
 		return nil, cErr
 	}
 
-	gameMap := make(GameMap, xy.x, xy.y)
+	gameMap := make(GameMap, xy.y)
 
 	file.Seek(0, 0)
 	scanner := bufio.NewScanner(file)
