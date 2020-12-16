@@ -1,0 +1,37 @@
+--- 
+ tiles:
+  wall_1:
+   ascii: "="
+   data:
+    passable: false
+  wall_2:
+   ascii: "["
+   data:
+    passable: false
+  wall_3:
+   ascii: "]"
+   data:
+    passable: false
+  wall_4:
+   ascii: "#"
+   data:
+    passable: false
+  wall_5:
+   ascii: "|"
+   data:
+    passable: false
+  wall_6:
+   ascii: "+"
+   data:
+    passable: false
+  blank:
+    ascii: " "
+    passable: true
+ actors:
+  player:
+   ascii: "P"
+   data:
+     lives: 3
+     score: 0
+  enemy:
+   ascii: "E"
