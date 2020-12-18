@@ -15,6 +15,7 @@ type Tile struct {
 }
 
 func (t Tile) String() string {
+	// TODO
 	/*if !TopLayer.IsBlank() {
 		return fmt.Sprint(t.TopLayer)
 	}*/

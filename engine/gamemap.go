@@ -99,8 +99,8 @@ func (gm GameMap) AddActor(a Actor) {
 }
 
 // InBounds is a function that determines whether a movement option for an actor
-// in a chosen direction is valid and returns a Coord object containing the
-// new x, y values.
+// in a chosen direction remains inside the bounds of the game board box
+// and returns a Coord object containing the new x, y values.
 func (gm GameMap) InBounds(a *Actor, dir Direction) (Coord, error) {
 	var startX int8 = a.X
 	var startY int8 = a.Y

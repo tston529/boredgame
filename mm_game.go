@@ -58,8 +58,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// populateBoard(&gameMap)
-
 	width = len(gameMap[0])
 	height = len(gameMap)
 
@@ -216,6 +214,8 @@ func createMessage(msg string, boxWidth int, x int, y int) (string, error) {
 	return builder.String(), nil
 }
 
+// validateMove moves the player within the board, handling obstacles and
+// the classic "pac-man warp."
 func validateMove(gm *engine.GameMap, p *player, dir engine.Direction) {
 
 	if paused {
