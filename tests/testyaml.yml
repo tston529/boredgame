@@ -1,4 +1,9 @@
 --- 
+ map: 
+  filename: "maps/wall_data_map.txt"
+  data:
+   x: 23
+   y: 23
  tiles:
   wall_1:
    ascii: "="
@@ -26,12 +31,20 @@
     passable: false
   blank:
     ascii: " "
-    passable: true
+    data:
+     passable: true
  actors:
+  dot:
+    ascii: "."
+  puck:
+    ascii: "@"
   player:
    ascii: "P"
    data:
      lives: 3
      score: 0
+     passable: false
   enemy:
    ascii: "E"
+   data:
+    passable: true

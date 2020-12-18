@@ -9,22 +9,15 @@ import (
 // provided no Actors exist in the Tile.
 type Tile struct {
 	Background string
+	TopLayer   string
 	Actors     []Actor
-	passable   bool
-}
-
-// Passable checks whether the Tile is solid or otherwise.
-// Returns passable state as a boolean.
-func (t Tile) Passable() bool {
-	if len(t.Actors) == 0 {
-		return t.passable
-	} else if t.Actors[0].String() != "" {
-		return t.Actors[0].Passable && t.passable
-	}
-	return t.passable
+	Data       map[interface{}]interface{}
 }
 
 func (t Tile) String() string {
+	/*if !TopLayer.IsBlank() {
+		return fmt.Sprint(t.TopLayer)
+	}*/
 	if len(t.Actors) != 0 && t.Actors[0].String() != "" {
 		return fmt.Sprintf("%s", t.Actors[0])
 	}

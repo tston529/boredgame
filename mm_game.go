@@ -8,7 +8,7 @@ import (
 
 	"./engine"
 	"./util"
-	"./mm_render"
+	//"./mm_render"
 	"github.com/eiannone/keyboard"
 
 	//"strconv"
@@ -43,6 +43,7 @@ func main() {
 	mm_render.PostMessage(mm_render.MyUser.Id, channel.Id, "Gamu Starto desu")*/
 
 	//os.Exit(0)
+	gameData := engine.LoadGameData("./tests/testyaml.yml")
 
 	if err := keyboard.Open(); err != nil {
 		panic(err)
@@ -51,20 +52,13 @@ func main() {
 		_ = keyboard.Close()
 	}()
 
-	var wallData = make(map[string]bool)
-	wallData["["] = true
-	wallData["="] = true
-	wallData["]"] = true
-	wallData["#"] = true
-	wallData["+"] = true
-	wallData["|"] = true
-
-	gameMap, err := engine.LoadMap("./maps/ascii_map.txt", wallData)
+	gameMap, err := engine.LoadMap(gameData.Map.Filename, &gameData)
 	if err != nil || gameMap == nil {
 		fmt.Println("Failed to load map. Exiting...")
+		os.Exit(1)
 	}
 
-	populateBoard(&gameMap)
+	// populateBoard(&gameMap)
 
 	width = len(gameMap[0])
 	height = len(gameMap)
@@ -84,10 +78,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	playerActor := engine.Actor{ASCII: "P", X: 11, Y: 12, Passable: false}
+	playerActor := engine.Actor{ASCII: gameData.Actors["player"].ASCII, X: 11, Y: 12}
 	player1 := player{3, 0, playerActor}
 	gameMap.AddActor(player1.Actor)
-	enemy1 := engine.Actor{ASCII: "E", X: 5, Y: 6, Passable: true}
+	enemy1 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: 5, Y: 6}
 	gameMap.AddActor(enemy1)
 
 	var exit = false
@@ -234,9 +228,8 @@ func validateMove(gm *engine.GameMap, p *player, dir engine.Direction) {
 	var destX int8 = (*p).Actor.X
 	var destY int8 = (*p).Actor.Y
 
-	newCoord, err := gm.Move(&(*p).Actor, dir)
 	// If out of bounds, pac-man loop around
-	if err != nil {
+	if newCoord, err := gm.InBounds(&(*p).Actor, dir); err != nil {
 		switch dir {
 		case engine.Left:
 			destX = int8(len((*gm)[0]) - 1)
@@ -263,32 +256,15 @@ func validateMove(gm *engine.GameMap, p *player, dir engine.Direction) {
 	if len((*gm)[destY][destX].Actors) > 0 {
 		(*p).collision(&(*gm)[destY][destX].Actors[0])
 	}
-	if (*gm)[destY][destX].Passable() {
+	if passable, ok := (*gm)[destY][destX].Data["passable"]; ok && passable.(bool) {
 		(*p).Actor.SetCoords(destX, destY)
-		(*gm).AddActor((*p).Actor)
+		gm.AddActor((*p).Actor)
 		(*gm)[startY][startX].Actors = (*gm)[startY][startX].Actors[1:]
 	}
 }
 
 func enemyMove(gm engine.GameMap, e *enemy) {
 
-}
-
-// populateBoard is to be run once at the start of the game. It parses the
-// background characters of the initial board state and generates actors
-// accordingly.
-func populateBoard(gm *engine.GameMap) {
-	for y := 0; y < len(*gm); y++ {
-		for x := 0; x < len((*gm)[0]); x++ {
-			bg := (*gm)[y][x].Background
-			if bg == "." || bg == "@" {
-				(*gm)[y][x].Background = " "
-				(*gm).AddActor(engine.Actor{ASCII: bg, X: int8(x), Y: int8(y), Passable: true})
-			} else if bg == " " {
-				(*gm).AddActor(engine.Actor{ASCII: "", X: int8(x), Y: int8(y), Passable: true})
-			}
-		}
-	}
 }
 
 // collision affects the game state if the player collides with

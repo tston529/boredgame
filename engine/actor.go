@@ -13,10 +13,10 @@ const (
 
 // Actor is any game object that will have some kind of logic associated with it.
 type Actor struct {
-	ASCII    string
-	X        int8
-	Y        int8
-	Passable bool
+	ASCII  string
+	X      int8
+	Y      int8
+	Data   map[interface{}]interface{}
 }
 
 func (a Actor) String() string {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"fmt"
 )
 
 // GameMap is a type representing the board - it is a 2D array of Tiles.
@@ -18,7 +19,7 @@ type Coord struct {
 
 // LoadMap reads a map from a file and returns a 2d array of Tiles which contain
 // the characters as Backgrounds.
-func LoadMap(filename string, wallData map[string]bool) (GameMap, error) {
+func LoadMap(filename string, sd *SceneData) (GameMap, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -26,27 +27,43 @@ func LoadMap(filename string, wallData map[string]bool) (GameMap, error) {
 	defer file.Close()
 	file.Seek(0, 0)
 
-	xy, cErr := lineCounter(file)
-	if cErr != nil {
-		return nil, cErr
+	var xy sz
+
+	if (*sd).Map.Data.X > 0 && (*sd).Map.Data.Y > 0 {
+		xy.X = (*sd).Map.Data.X
+		xy.Y = (*sd).Map.Data.Y
+	} else {
+		xy, err = lineCounter(file)
+		if err != nil {
+			fmt.Printf("error counting lines in map file")
+			return nil, err
+		}
 	}
 
-	gameMap := make(GameMap, xy.y)
+	gameMap := make(GameMap, xy.Y)
 
 	file.Seek(0, 0)
 	scanner := bufio.NewScanner(file)
 	currLine := 0
 	for scanner.Scan() {
-		if currLine >= int(xy.x) {
+		if currLine >= int(xy.X) {
 			break
 		}
 		line := scanner.Text()
-		gameMap[currLine] = make([]Tile, xy.y)
-		for i := 0; i < len(line); i++ {
-			tileASCII := string(line[i])
-			_, ok := wallData[tileASCII]
+		lineSlice := strings.Fields(line)
+		gameMap[currLine] = make([]Tile, xy.Y)
+
+		for i := 0; i < len(lineSlice); i++ {
+			tileASCII := string(lineSlice[i])
 			tileActors := []Actor{}
-			gameMap[currLine][i] = Tile{Background: tileASCII, passable: !ok, Actors: tileActors}
+			if tileVal, ok := (*sd).Tiles[tileASCII]; ok {
+				gameMap[currLine][i] = Tile{Background: tileVal.ASCII, Actors: tileActors, Data: tileVal.Data}
+				continue
+			} 
+			if actorVal, ok := (*sd).Actors[tileASCII]; ok {
+				tileActors = append(tileActors, Actor{ASCII: actorVal.ASCII, Data: actorVal.Data})
+				gameMap[currLine][i] = Tile{Background: (*sd).Tiles["blank"].ASCII, Actors: tileActors, Data: (*sd).Tiles["blank"].Data}
+			} 
 		}
 		currLine++
 	}
@@ -54,6 +71,7 @@ func LoadMap(filename string, wallData map[string]bool) (GameMap, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
+	//os.Exit(1)
 	return gameMap, nil
 }
 
@@ -80,15 +98,16 @@ func (gm GameMap) AddActor(a Actor) {
 	}
 }
 
-// Move is a function that determines whether a movement option for an actor
+// InBounds is a function that determines whether a movement option for an actor
 // in a chosen direction is valid and returns a Coord object containing the
 // new x, y values.
-func (gm GameMap) Move(a *Actor, dir Direction) (Coord, error) {
+func (gm GameMap) InBounds(a *Actor, dir Direction) (Coord, error) {
 	var startX int8 = a.X
 	var startY int8 = a.Y
 
 	var destX int8 = a.X
 	var destY int8 = a.Y
+
 	switch dir {
 	case Up:
 		destY--
@@ -105,12 +124,8 @@ func (gm GameMap) Move(a *Actor, dir Direction) (Coord, error) {
 	}
 
 	if destY < 0 || destX < 0 || int(destY) > len(gm)-1 || int(destX) > len(gm[0])-1 {
-		return Coord{}, errors.New("out of bounds")
+		return Coord{startX, startY}, errors.New("out of bounds")
 	}
 
-	if gm[destY][destX].Passable() {
-		return Coord{destX, destY}, nil
-	}
-
-	return Coord{startX, startY}, nil
+	return Coord{destX, destY}, nil
 }

@@ -16,7 +16,8 @@ type Actor struct {
 	Data map[interface{}]interface{}
 }
 
-type T struct {
+type TileData struct {
+	MapFile string
 	Tiles map[string]Tile
 	Actors map[string]Actor
 }
@@ -28,17 +29,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	t := T{}
+	t := TileData{}
 	err = yaml.Unmarshal(file, &t)
     if err != nil {
         fmt.Printf("error: %v", err)
     }
 
+    fmt.Printf("Map File: %s\n", t.MapFile)
+
 	for key, _ := range t.Tiles {
-		fmt.Printf("%v : %v\n", key, t.Tiles[key].ASCII)
+		fmt.Printf("%v : '%v'\n", key, t.Tiles[key].ASCII)
 	}
 	for key, _ := range t.Actors {
-		fmt.Printf("%v : %v\n", key, t.Actors[key].ASCII)
+		fmt.Printf("%v : '%v'\n", key, t.Actors[key].ASCII)
 	}
 
 }
