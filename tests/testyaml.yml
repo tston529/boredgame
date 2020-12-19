@@ -36,8 +36,12 @@
  actors:
   dot:
     ascii: "."
+    data:
+     score: 10
   puck:
     ascii: "@"
+    data:
+     score: 50
   player:
    ascii: "P"
    data:

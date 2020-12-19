@@ -9,16 +9,11 @@ import (
 // provided no Actors exist in the Tile.
 type Tile struct {
 	Background string
-	TopLayer   string
 	Actors     []Actor
 	Data       map[interface{}]interface{}
 }
 
 func (t Tile) String() string {
-	// TODO
-	/*if !TopLayer.IsBlank() {
-		return fmt.Sprint(t.TopLayer)
-	}*/
 	if len(t.Actors) != 0 && t.Actors[0].String() != "" {
 		return fmt.Sprintf("%s", t.Actors[0])
 	}

@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-
-	"errors"
 	"os"
 
 	"./engine"
@@ -29,11 +27,11 @@ type enemy struct {
 }
 
 var paused = false
-var pausedString string
-var gameOverString string
 
 var width int
 var height int
+
+var gameData engine.SceneData
 
 func main() {
 	/*mm_render.Client = mm_render.StartMattermostClient("<chat server>")
@@ -43,7 +41,7 @@ func main() {
 	mm_render.PostMessage(mm_render.MyUser.Id, channel.Id, "Gamu Starto desu")*/
 
 	//os.Exit(0)
-	gameData := engine.LoadGameData("./tests/testyaml.yml")
+	gameData = engine.LoadGameData("./tests/testyaml.yml")
 
 	if err := keyboard.Open(); err != nil {
 		panic(err)
@@ -52,34 +50,33 @@ func main() {
 		_ = keyboard.Close()
 	}()
 
+	// Generate game map from loaded game data
 	gameMap, err := engine.LoadMap(gameData.Map.Filename, &gameData)
-	if err != nil || gameMap == nil {
-		fmt.Println("Failed to load map. Exiting...")
+	if err != nil {
+		fmt.Printf("error: %s\n", err)
 		os.Exit(1)
 	}
 
 	width = len(gameMap[0])
 	height = len(gameMap)
 
-	x := int((width - len("PAUSED") - 6) / 2)
-	y := int((height - 5) / 2)
-
-	pausedString, err = createMessage("PAUSED", 10, x, y)
+	// Initialize pop-up message strings
+	pausedString, err := engine.CreateMessage("PAUSED", len("PAUSED")+4)
 	if err != nil {
-		fmt.Printf("%s\n", err)
+		fmt.Printf("error: %s\n", err)
 		os.Exit(1)
 	}
-	x = int((width - len("GAME OVER") - 8) / 2)
-	gameOverString, err = createMessage("GAME OVER", 13, x, y)
+
+	gameOverString, err := engine.CreateMessage("GAME OVER", len("GAME OVER")+4)
 	if err != nil {
-		fmt.Printf("%s\n", err)
+		fmt.Printf("error: %s\n", err)
 		os.Exit(1)
 	}
 
 	playerActor := engine.Actor{ASCII: gameData.Actors["player"].ASCII, X: 11, Y: 12}
 	player1 := player{3, 0, playerActor}
 	gameMap.AddActor(player1.Actor)
-	enemy1 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: 5, Y: 6}
+	enemy1 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: 9, Y: 12}
 	gameMap.AddActor(enemy1)
 
 	var exit = false
@@ -90,23 +87,24 @@ func main() {
 				panic(err)
 			}
 			switch char {
-			case 'w':
+			case 'w', 'W':
 				validateMove(&gameMap, &player1, engine.Up)
 				break
-			case 'a':
+			case 'a', 'A':
 				validateMove(&gameMap, &player1, engine.Left)
 				break
-			case 's':
+			case 's', 'S':
 				validateMove(&gameMap, &player1, engine.Down)
 				break
-			case 'd':
+			case 'd', 'D':
 				validateMove(&gameMap, &player1, engine.Right)
 				break
-			case 'p':
+			case 'p', 'P':
 				togglePaused()
 				break
 			}
 			if key == keyboard.KeyEsc {
+				paused = false
 				exit = true
 				break
 			}
@@ -128,9 +126,22 @@ func main() {
 			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameMap, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
 			//mm_render.SendNextFrame(fmt.Sprintf("```\n%s%s\n```", gameMap, player1.Hud()))
 			time.Sleep(100 * time.Millisecond)
+		} else {
+			y := int((height - 5) / 2)
+			x := int((width-len(strings.Split(pausedString, "\n")[0]))/2) + 1
+			pausedFrame := engine.OverlayMessage(gameMap.String(), pausedString, x, y)
+
+			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", pausedFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+			// mm_render.SendNextFrame(fmt.Sprintf("```\n%s%s\n```", pausedFrame, player1.Hud()))
+			for paused {
+				time.Sleep(100 * time.Millisecond)
+			}
 		}
 		if player1.lives == 0 {
-			fmt.Printf("\x1b[u%s\x1b[u", gameOverString)
+			y := int((height - 5) / 2)
+			x := int((width-len(strings.Split(gameOverString, "\n")[0]))/2) + 1
+			gameOverFrame := engine.OverlayMessage(gameMap.String(), gameOverString, x, y)
+			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameOverFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
 			os.Exit(0)
 		}
 	}
@@ -154,64 +165,9 @@ func actorsOnTile(x int8, y int8, gm *engine.GameMap) string {
 	return builder.String()
 }
 
-// togglePaused toggles the game's paused state. If the game is now
-// paused, display a "PAUSED" message on the board.
+// togglePaused toggles the game's paused state.
 func togglePaused() {
 	paused = !paused
-	if paused {
-		fmt.Printf("\x1b[u%s", pausedString)
-	} else {
-		fmt.Printf("\x1b[u\x1b[2J")
-	}
-}
-
-// createMessage creates a message box of desired width, to be drawn
-// at a certain x/y position. It returns the built string and any errors
-// that may have been found about the rendering environment.
-func createMessage(msg string, boxWidth int, x int, y int) (string, error) {
-	// TODO: Get rid of ansi escape sequences.
-	// Possible ideas: return []string where each elt is a new line in the message box
-
-	if boxWidth < len(msg) {
-		return "", errors.New("can't have a box smaller than the text")
-	}
-
-	if x < 0 {
-		return "", errors.New("message box would be too wide")
-	}
-
-	isOdd := (boxWidth - len(msg)) % 2
-	builder := strings.Builder{}
-
-	builder.WriteString(fmt.Sprintf("\x1b[%dB\x1b[%dC", y, x))
-	for i := 0; i < boxWidth+4; i++ {
-		builder.WriteString(" ")
-	}
-	builder.WriteString(fmt.Sprintf("\n\x1b[%dC +", x))
-	for i := 0; i < boxWidth; i++ {
-		builder.WriteString("=")
-	}
-	builder.WriteString(fmt.Sprintf("+ \n\x1b[%dC |", x))
-	padding := int((boxWidth - len(msg)) / 2)
-	for i := 0; i < padding; i++ {
-		builder.WriteString(" ")
-	}
-
-	builder.WriteString(msg)
-
-	for i := 0; i < padding+isOdd; i++ {
-		builder.WriteString(" ")
-	}
-	builder.WriteString(fmt.Sprintf("| \n\x1b[%dC +", x))
-	for i := 0; i < boxWidth; i++ {
-		builder.WriteString("=")
-	}
-	builder.WriteString(fmt.Sprintf("+ \n\x1b[%dC", x))
-	for i := 0; i < boxWidth+4; i++ {
-		builder.WriteString(" ")
-	}
-
-	return builder.String(), nil
 }
 
 // validateMove moves the player within the board, handling obstacles and
@@ -270,13 +226,16 @@ func enemyMove(gm engine.GameMap, e *enemy) {
 // collision affects the game state if the player collides with
 // another actor.
 func (p *player) collision(a *engine.Actor) {
-	if (*a).ASCII == "." {
-		(*p).score += 10
-		(*a).ASCII = ""
-	} else if (*a).ASCII == "E" {
+	switch a.ASCII {
+	case gameData.Actors["dot"].ASCII, gameData.Actors["puck"].ASCII:
+		p.score += a.Data["score"].(int)
+		a.ASCII = gameData.Actors["blank"].ASCII
+		break
+	case gameData.Actors["enemy"].ASCII:
 		if (*p).lives > 0 {
 			(*p).lives--
 		}
+		break
 	}
 }
 

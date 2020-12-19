@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"strings"
-	"fmt"
 )
 
 // GameMap is a type representing the board - it is a 2D array of Tiles.
@@ -29,15 +28,11 @@ func LoadMap(filename string, sd *SceneData) (GameMap, error) {
 
 	var xy sz
 
-	if (*sd).Map.Data.X > 0 && (*sd).Map.Data.Y > 0 {
+	if sd.Map.Data.X > 0 && sd.Map.Data.Y > 0 {
 		xy.X = (*sd).Map.Data.X
 		xy.Y = (*sd).Map.Data.Y
 	} else {
-		xy, err = lineCounter(file)
-		if err != nil {
-			fmt.Printf("error counting lines in map file")
-			return nil, err
-		}
+		return nil, errors.New("no length or width ('X', 'Y') found for map")
 	}
 
 	gameMap := make(GameMap, xy.Y)
@@ -59,11 +54,11 @@ func LoadMap(filename string, sd *SceneData) (GameMap, error) {
 			if tileVal, ok := (*sd).Tiles[tileASCII]; ok {
 				gameMap[currLine][i] = Tile{Background: tileVal.ASCII, Actors: tileActors, Data: tileVal.Data}
 				continue
-			} 
+			}
 			if actorVal, ok := (*sd).Actors[tileASCII]; ok {
 				tileActors = append(tileActors, Actor{ASCII: actorVal.ASCII, Data: actorVal.Data})
 				gameMap[currLine][i] = Tile{Background: (*sd).Tiles["blank"].ASCII, Actors: tileActors, Data: (*sd).Tiles["blank"].Data}
-			} 
+			}
 		}
 		currLine++
 	}
@@ -71,7 +66,7 @@ func LoadMap(filename string, sd *SceneData) (GameMap, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	//os.Exit(1)
+
 	return gameMap, nil
 }
 

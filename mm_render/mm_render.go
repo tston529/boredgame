@@ -54,9 +54,9 @@ func FindTeam(teamName string) {
 
 func PostMessage(recipientId string, channelId string, msg string) {
 	newPost := model.Post{
-		UserId: recipientId,
+		UserId:    recipientId,
 		ChannelId: channelId,
-		Message: msg,
+		Message:   msg,
 	}
 	if post, resp := Client.CreatePost(&newPost); resp.Error != nil {
 		println("Failed to post the message :(")
