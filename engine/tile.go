@@ -26,10 +26,14 @@ func (t Tile) String() string {
 // This helps keep something on top if the first Actor in the Tile
 // is removed from the array.
 func (t *Tile) KeepOnTop() {
-	if len((*t).Actors) > 1 && ((*t).Actors[0].String() == "" || (*t).Actors[0].String() == " ") {
-		(*t).Actors = append((*t).Actors[:0], (*t).Actors[1:]...)
-		if len((*t).Actors) > 1 {
-			(*t).Actors = (*t).Actors[:len((*t).Actors)-1]
+	if len(t.Actors) == 1 && (t.Actors[0].String() == "" || t.Actors[0].String() == " ") {
+		t.Actors = append(t.Actors[:0])
+		return
+	}
+	if len(t.Actors) > 1 && (t.Actors[0].String() == "" || t.Actors[0].String() == " ") {
+		t.Actors = append(t.Actors[:0], t.Actors[1:]...)
+		if len(t.Actors) > 1 {
+			t.Actors = t.Actors[:len(t.Actors)-1]
 		}
 	}
 }

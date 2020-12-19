@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"./engine"
 	"./util"
+	"fmt"
+	"math/rand"
+	"os"
 	//"./mm_render"
 	"github.com/eiannone/keyboard"
 
@@ -76,8 +76,17 @@ func main() {
 	playerActor := engine.Actor{ASCII: gameData.Actors["player"].ASCII, X: 11, Y: 12}
 	player1 := player{3, 0, playerActor}
 	gameMap.AddActor(player1.Actor)
-	enemy1 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: 9, Y: 12}
-	gameMap.AddActor(enemy1)
+
+	enemyActor := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: 9, Y: 12}
+	enemy1 := enemy{engine.Up, enemyActor}
+	gameMap.AddActor(enemy1.Actor)
+
+	rand.Seed(time.Now().Unix())
+
+	// this channel gets data passed to it when movement occurs.
+	// Collision detection only happens when data is pulled off the channel,
+	// preventing more than one collision from happening at once.
+	movement := make(chan bool)
 
 	var exit = false
 	go func() {
@@ -88,16 +97,16 @@ func main() {
 			}
 			switch char {
 			case 'w', 'W':
-				validateMove(&gameMap, &player1, engine.Up)
+				movement <- validateMove(&gameMap, &(player1.Actor), engine.Up)
 				break
 			case 'a', 'A':
-				validateMove(&gameMap, &player1, engine.Left)
+				movement <- validateMove(&gameMap, &(player1.Actor), engine.Left)
 				break
 			case 's', 'S':
-				validateMove(&gameMap, &player1, engine.Down)
+				movement <- validateMove(&gameMap, &(player1.Actor), engine.Down)
 				break
 			case 'd', 'D':
-				validateMove(&gameMap, &player1, engine.Right)
+				movement <- validateMove(&gameMap, &(player1.Actor), engine.Right)
 				break
 			case 'p', 'P':
 				togglePaused()
@@ -111,6 +120,7 @@ func main() {
 		}
 	}()
 
+	// Ensure each tile displays the first actor in its list
 	go func() {
 		for {
 			for y := 0; y < len(gameMap); y++ {
@@ -121,6 +131,30 @@ func main() {
 		}
 	}()
 
+	// Rudimentary enemy movement. All random.
+	go func() {
+		for {
+			enemyMove(gameMap, &enemy1)
+			movement <- true
+			time.Sleep(200 * time.Millisecond)
+		}
+	}()
+
+	// Collision handling - each movement (by player or enemy) will trigger
+	// data to be pushed onto the movement channel.  When movement is
+	// detected this way, collision checking occurs.
+	go func() {
+		for {
+			validMove := <-movement
+			if validMove && len(gameMap[player1.Y][player1.X].Actors) > 1 {
+				for i := range gameMap[player1.Y][player1.X].Actors {
+					player1.collision(&(gameMap[player1.Y][player1.X].Actors[i]))
+				}
+			}
+		}
+	}()
+
+	// Core loop; continue rendering each frame until all player's lives are lost.
 	for !exit {
 		if !paused {
 			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameMap, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
@@ -141,7 +175,10 @@ func main() {
 			y := int((height - 5) / 2)
 			x := int((width-len(strings.Split(gameOverString, "\n")[0]))/2) + 1
 			gameOverFrame := engine.OverlayMessage(gameMap.String(), gameOverString, x, y)
-			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameOverFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+
+			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n", gameOverFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+			//mm_render.SendNextFrame(fmt.Sprintf("```\n%s%s\n```", gameOverFrame, player1.Hud()))
+
 			os.Exit(0)
 		}
 	}
@@ -152,6 +189,7 @@ func main() {
 func actorsOnTile(x int8, y int8, gm *engine.GameMap) string {
 	builder := strings.Builder{}
 	l := len((*gm)[y][x].Actors)
+
 	builder.WriteString("Actors on tile: [")
 	if l > 0 {
 		for x, a := range (*gm)[y][x].Actors {
@@ -162,6 +200,7 @@ func actorsOnTile(x int8, y int8, gm *engine.GameMap) string {
 		}
 	}
 	builder.WriteString("]")
+
 	return builder.String()
 }
 
@@ -170,37 +209,37 @@ func togglePaused() {
 	paused = !paused
 }
 
-// validateMove moves the player within the board, handling obstacles and
+// validateMove moves an actor  within the board, handling obstacles and
 // the classic "pac-man warp."
-func validateMove(gm *engine.GameMap, p *player, dir engine.Direction) {
+func validateMove(gm *engine.GameMap, a *engine.Actor, dir engine.Direction) bool {
 
 	if paused {
-		return
+		return false
 	}
 
-	var startX int8 = (*p).Actor.X
-	var startY int8 = (*p).Actor.Y
+	var startX int8 = a.X
+	var startY int8 = a.Y
 
-	var destX int8 = (*p).Actor.X
-	var destY int8 = (*p).Actor.Y
+	var destX int8 = a.X
+	var destY int8 = a.Y
 
 	// If out of bounds, pac-man loop around
-	if newCoord, err := gm.InBounds(&(*p).Actor, dir); err != nil {
+	if newCoord, err := gm.InBounds(a, dir); err != nil {
 		switch dir {
 		case engine.Left:
 			destX = int8(len((*gm)[0]) - 1)
-			destY = (*p).Actor.Y
+			destY = a.Y
 			break
 		case engine.Right:
 			destX = 0
-			destY = (*p).Actor.Y
+			destY = a.Y
 			break
 		case engine.Up:
-			destX = (*p).Actor.X
+			destX = a.X
 			destY = int8(len(*gm) - 1)
 			break
 		case engine.Down:
-			destX = (*p).Actor.X
+			destX = a.X
 			destY = 0
 			break
 		}
@@ -208,19 +247,24 @@ func validateMove(gm *engine.GameMap, p *player, dir engine.Direction) {
 		destX = newCoord.X
 		destY = newCoord.Y
 	}
-
-	if len((*gm)[destY][destX].Actors) > 0 {
-		(*p).collision(&(*gm)[destY][destX].Actors[0])
-	}
 	if passable, ok := (*gm)[destY][destX].Data["passable"]; ok && passable.(bool) {
-		(*p).Actor.SetCoords(destX, destY)
-		gm.AddActor((*p).Actor)
+		a.SetCoords(destX, destY)
+		gm.AddActor(*a)
 		(*gm)[startY][startX].Actors = (*gm)[startY][startX].Actors[1:]
+		return true
 	}
+	return false
 }
 
+// enemyMove is a helper function to validate a random movement
+// for an enemy, changing directions if it hits a wall.
 func enemyMove(gm engine.GameMap, e *enemy) {
-
+	for !validateMove(&gm, &(e.Actor), e.direction) {
+		x := engine.Direction(rand.Intn(4))
+		if x != e.direction {
+			e.direction = x
+		}
+	}
 }
 
 // collision affects the game state if the player collides with
@@ -229,11 +273,11 @@ func (p *player) collision(a *engine.Actor) {
 	switch a.ASCII {
 	case gameData.Actors["dot"].ASCII, gameData.Actors["puck"].ASCII:
 		p.score += a.Data["score"].(int)
-		a.ASCII = gameData.Actors["blank"].ASCII
+		a.ASCII = "" // This is grounds for actor deletion in the KeepOnTop() routine
 		break
 	case gameData.Actors["enemy"].ASCII:
-		if (*p).lives > 0 {
-			(*p).lives--
+		if p.lives > 0 {
+			p.lives--
 		}
 		break
 	}

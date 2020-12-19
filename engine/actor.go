@@ -5,18 +5,22 @@ type Direction int8
 
 // List of cardinal Directions as a quasi-enum
 const (
-	Up    Direction = 0
-	Right           = 1
-	Down            = 3
-	Left            = 5
+	Up Direction = iota
+	Right
+	Down
+	Left
 )
+
+func (d Direction) String() string {
+	return [...]string{"Up", "Right", "Down", "Left"}[d]
+}
 
 // Actor is any game object that will have some kind of logic associated with it.
 type Actor struct {
-	ASCII  string
-	X      int8
-	Y      int8
-	Data   map[interface{}]interface{}
+	ASCII string
+	X     int8
+	Y     int8
+	Data  map[interface{}]interface{}
 }
 
 func (a Actor) String() string {
