@@ -1,10 +1,13 @@
 package mm_render
 
 import (
+	"fmt"
+	"github.com/mattermost/mattermost-server/model"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"os"
 	"os/signal"
-
-	"github.com/mattermost/mattermost-server/model"
+	"strings"
 )
 
 var Client *model.Client4
@@ -12,11 +15,39 @@ var webSocketClient *model.WebSocketClient
 
 var MyUser *model.User
 var myTeam *model.Team
+var Recipient *model.User
+var MyChannel *model.Channel
 var GamePost *model.Post
 var debuggingChannel *model.Channel
 
-func StartMattermostClient(serverAddr string) *model.Client4 {
-	return model.NewAPIv4Client(serverAddr)
+type MattermostData struct {
+	User      string
+	Pass      string
+	ServerUrl string
+	TeamName  string
+}
+
+func LoadMattermostData(filename string) MattermostData {
+	file, err := ioutil.ReadFile(filename)
+	if err != nil {
+		fmt.Println("Error opening file")
+		os.Exit(1)
+	}
+
+	data := MattermostData{}
+	err = yaml.Unmarshal(file, &data)
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+		os.Exit(1)
+	}
+
+	return data
+}
+
+func StartMattermostClient(serverAddr string, username string, password string) {
+	SetupGracefulShutdown()
+	Client = model.NewAPIv4Client(serverAddr)
+	UserLogin(username, password)
 }
 
 func SetupGracefulShutdown() {
@@ -27,7 +58,6 @@ func SetupGracefulShutdown() {
 			if webSocketClient != nil {
 				webSocketClient.Close()
 			}
-
 			os.Exit(0)
 		}
 	}()
@@ -52,10 +82,40 @@ func FindTeam(teamName string) {
 	}
 }
 
-func PostMessage(recipientId string, channelId string, msg string) {
+func GetChannel(channelName string) {
+	cn := strings.ReplaceAll(channelName, " ", "-")
+	if channel, resp := Client.GetChannelByName(cn, myTeam.Id, ""); resp.Error != nil {
+		println("Failed to get channel '" + channelName + "'")
+		fmt.Printf("%v", resp)
+		os.Exit(1)
+	} else {
+		MyChannel = channel
+		Recipient = MyUser
+		return
+	}
+}
+
+func GetDirectMessageChannel(recipient string) {
+	user, resp := Client.GetUserByUsername(recipient, "")
+	if resp.Error != nil {
+		fmt.Printf("Couldn't find user with username '%s'\n", recipient)
+		os.Exit(1)
+	}
+	Recipient = user
+	if channel, resp := Client.CreateDirectChannel(MyUser.Id, user.Id); resp.Error != nil {
+		println("Failed to get channel with user '" + recipient + "'")
+		println(resp.Error)
+		os.Exit(1)
+	} else {
+		MyChannel = channel
+	}
+}
+
+func PostMessage(msg string) {
+	// not sure how userId comes into play with a non-DM channel
 	newPost := model.Post{
-		UserId:    recipientId,
-		ChannelId: channelId,
+		UserId:    Recipient.Id,
+		ChannelId: MyChannel.Id,
 		Message:   msg,
 	}
 	if post, resp := Client.CreatePost(&newPost); resp.Error != nil {

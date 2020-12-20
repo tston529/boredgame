@@ -2,17 +2,18 @@ package main
 
 import (
 	"./engine"
+	"./mm_render"
 	"./util"
 	"fmt"
+	"github.com/eiannone/keyboard"
 	"math/rand"
 	"os"
-	//"./mm_render"
-	"github.com/eiannone/keyboard"
 
 	//"strconv"
 	"strings"
 	"time"
 	//"gopkg.in/yaml.v2"
+	"flag"
 )
 
 type player struct {
@@ -33,14 +34,50 @@ var height int
 
 var gameData engine.SceneData
 
-func main() {
-	/*mm_render.Client = mm_render.StartMattermostClient("<chat server>")
-	mm_render.UserLogin("<username>", "<password>")
-	mm_render.SetupGracefulShutdown()
-	channel, _ := mm_render.Client.CreateDirectChannel(mm_render.MyUser.Id, os.Args[1])
-	mm_render.PostMessage(mm_render.MyUser.Id, channel.Id, "Gamu Starto desu")*/
+// Whether to play the game locally (cli) or via mattermost
+var cli = true
 
-	//os.Exit(0)
+// For sending frame to mattermost as preformatted text
+// (wrapped in backticks -> ```\n<frame>\n```)
+var preBeginWrap string
+var preEndWrap string
+
+func main() {
+	mmUser := flag.String("user", "", "The user to receive the DM of the game")
+	mmChannel := flag.String("channel", "", "The channel to receive the game message")
+	mmPreformatted := flag.Bool("pre", true, "Whether to wrap each frame in backticks (```\n<frame\n```)")
+	flag.Parse()
+
+	if *mmUser != "" && *mmChannel != "" {
+		fmt.Println("Can't specify both user and channel, choose one or the other.")
+		os.Exit(1)
+	}
+
+	if *mmUser != "" || *mmChannel != "" {
+		cli = false
+	}
+
+	if !cli {
+		if *mmPreformatted {
+			preBeginWrap = "```\n"
+			preEndWrap = "\n```"
+		} else {
+			preBeginWrap = ""
+			preEndWrap = ""
+		}
+		mmData := mm_render.LoadMattermostData("./tests/mattermost.yml")
+
+		mm_render.StartMattermostClient(mmData.ServerUrl, mmData.User, mmData.Pass)
+		if *mmUser != "" {
+			mm_render.GetDirectMessageChannel(*mmUser)
+		} else if *mmChannel != "" {
+			mm_render.FindTeam(mmData.TeamName)
+			mm_render.GetChannel(*mmChannel)
+		}
+
+		mm_render.PostMessage("Gamu Starto desu")
+	}
+
 	gameData = engine.LoadGameData("./tests/testyaml.yml")
 
 	if err := keyboard.Open(); err != nil {
@@ -73,20 +110,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	playerActor := engine.Actor{ASCII: gameData.Actors["player"].ASCII, X: 11, Y: 12}
+	playerX := (gameData.Actors["player"].Data["spawnX"]).(int)
+	playerY := (gameData.Actors["player"].Data["spawnY"]).(int)
+	playerActor := engine.Actor{ASCII: gameData.Actors["player"].ASCII, X: int8(playerX), Y: int8(playerY)}
 	player1 := player{3, 0, playerActor}
 	gameMap.AddActor(player1.Actor)
 
-	enemyActor := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: 9, Y: 12}
-	enemy1 := enemy{engine.Up, enemyActor}
+	enemyX := (gameData.Actors["enemy"].Data["spawnX"]).(int)
+	enemyY := (gameData.Actors["enemy"].Data["spawnY"]).(int)
+	enemyActor1 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY)}
+	enemy1 := enemy{engine.Up, enemyActor1}
 	gameMap.AddActor(enemy1.Actor)
+
+	enemyActor2 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY + 1)}
+	enemy2 := enemy{engine.Up, enemyActor2}
+	gameMap.AddActor(enemy2.Actor)
+
+	enemyActor3 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY + 2)}
+	enemy3 := enemy{engine.Up, enemyActor3}
+	gameMap.AddActor(enemy3.Actor)
 
 	rand.Seed(time.Now().Unix())
 
 	// this channel gets data passed to it when movement occurs.
 	// Collision detection only happens when data is pulled off the channel,
 	// preventing more than one collision from happening at once.
-	movement := make(chan bool)
+	movement := make(chan engine.Coord)
 
 	var exit = false
 	go func() {
@@ -97,16 +146,24 @@ func main() {
 			}
 			switch char {
 			case 'w', 'W':
-				movement <- validateMove(&gameMap, &(player1.Actor), engine.Up)
+				if validateMove(&gameMap, &(player1.Actor), engine.Up) {
+					movement <- engine.Coord{player1.X, player1.Y}
+				}
 				break
 			case 'a', 'A':
-				movement <- validateMove(&gameMap, &(player1.Actor), engine.Left)
+				if validateMove(&gameMap, &(player1.Actor), engine.Left) {
+					movement <- engine.Coord{player1.X, player1.Y}
+				}
 				break
 			case 's', 'S':
-				movement <- validateMove(&gameMap, &(player1.Actor), engine.Down)
+				if validateMove(&gameMap, &(player1.Actor), engine.Down) {
+					movement <- engine.Coord{player1.X, player1.Y}
+				}
 				break
 			case 'd', 'D':
-				movement <- validateMove(&gameMap, &(player1.Actor), engine.Right)
+				if validateMove(&gameMap, &(player1.Actor), engine.Right) {
+					movement <- engine.Coord{player1.X, player1.Y}
+				}
 				break
 			case 'p', 'P':
 				togglePaused()
@@ -124,7 +181,7 @@ func main() {
 	go func() {
 		for {
 			for y := 0; y < len(gameMap); y++ {
-				for x := 0; x < len((gameMap)[0]); x++ {
+				for x := 0; x < len(gameMap[0]); x++ {
 					gameMap[y][x].KeepOnTop()
 				}
 			}
@@ -134,9 +191,27 @@ func main() {
 	// Rudimentary enemy movement. All random.
 	go func() {
 		for {
-			enemyMove(gameMap, &enemy1)
-			movement <- true
-			time.Sleep(200 * time.Millisecond)
+			enemyMoveRandom(gameMap, &enemy1)
+			movement <- engine.Coord{enemy1.X, enemy1.Y}
+			time.Sleep(240 * time.Millisecond)
+		}
+	}()
+
+	// Rudimentary enemy movement. All random.
+	go func() {
+		for {
+			enemyMoveRandom(gameMap, &enemy2)
+			movement <- engine.Coord{enemy2.X, enemy2.Y}
+			time.Sleep(250 * time.Millisecond)
+		}
+	}()
+
+	// Rudimentary enemy movement. All random.
+	go func() {
+		for {
+			enemyMoveRandom(gameMap, &enemy3)
+			movement <- engine.Coord{enemy3.X, enemy3.Y}
+			time.Sleep(260 * time.Millisecond)
 		}
 	}()
 
@@ -146,7 +221,7 @@ func main() {
 	go func() {
 		for {
 			validMove := <-movement
-			if validMove && len(gameMap[player1.Y][player1.X].Actors) > 1 {
+			if validMove.X == player1.X && validMove.Y == player1.Y && len(gameMap[player1.Y][player1.X].Actors) > 1 {
 				for i := range gameMap[player1.Y][player1.X].Actors {
 					player1.collision(&(gameMap[player1.Y][player1.X].Actors[i]))
 				}
@@ -157,16 +232,22 @@ func main() {
 	// Core loop; continue rendering each frame until all player's lives are lost.
 	for !exit {
 		if !paused {
-			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameMap, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
-			//mm_render.SendNextFrame(fmt.Sprintf("```\n%s%s\n```", gameMap, player1.Hud()))
+			if cli {
+				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameMap, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+			} else {
+				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameMap, player1.Hud(), preEndWrap))
+			}
 			time.Sleep(100 * time.Millisecond)
 		} else {
 			y := int((height - 5) / 2)
 			x := int((width-len(strings.Split(pausedString, "\n")[0]))/2) + 1
 			pausedFrame := engine.OverlayMessage(gameMap.String(), pausedString, x, y)
 
-			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", pausedFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
-			// mm_render.SendNextFrame(fmt.Sprintf("```\n%s%s\n```", pausedFrame, player1.Hud()))
+			if cli {
+				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", pausedFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+			} else {
+				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
+			}
 			for paused {
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -176,8 +257,11 @@ func main() {
 			x := int((width-len(strings.Split(gameOverString, "\n")[0]))/2) + 1
 			gameOverFrame := engine.OverlayMessage(gameMap.String(), gameOverString, x, y)
 
-			fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n", gameOverFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
-			//mm_render.SendNextFrame(fmt.Sprintf("```\n%s%s\n```", gameOverFrame, player1.Hud()))
+			if cli {
+				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n", gameOverFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+			} else {
+				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
+			}
 
 			os.Exit(0)
 		}
@@ -256,9 +340,14 @@ func validateMove(gm *engine.GameMap, a *engine.Actor, dir engine.Direction) boo
 	return false
 }
 
-// enemyMove is a helper function to validate a random movement
+// enemyMoveRandom is a helper function to validate a random movement
 // for an enemy, changing directions if it hits a wall.
-func enemyMove(gm engine.GameMap, e *enemy) {
+func enemyMoveRandom(gm engine.GameMap, e *enemy) {
+	if e.X == 11 && e.Y == 8 {
+		e.direction = engine.Up
+		validateMove(&gm, &(e.Actor), e.direction)
+		return
+	}
 	for !validateMove(&gm, &(e.Actor), e.direction) {
 		x := engine.Direction(rand.Intn(4))
 		if x != e.direction {
