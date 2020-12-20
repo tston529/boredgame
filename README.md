@@ -1,6 +1,8 @@
 # mattermost-game-engine
 ASCII game engine whose board state will be rendered through calls to the Mattermost API
 
+NOTE: Requires Go v1.13 or above, there's specific error handling in the Mattermost api package that was only released starting in that version.
+
 TODO:
 ### Engine
 - [x] Make every board state exportable as a single string, such that it would be rendered the same in Notepad.exe as it would in a terminal.
