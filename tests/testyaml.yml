@@ -55,3 +55,6 @@ actors:
       spawnX: 11
       spawnY: 9
       passable: true
+      scared: "M"
+      dead: "X"
+      enemyAmt: 3

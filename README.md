@@ -21,9 +21,11 @@ TODO:
 
 ###  Demo Pac-Man clone
 - [ ] Player movement should happen automatically, arrow keys should only be used for changing directions
-- [ ] Slow down player movement
+- [x] Slow down player movement
 - [ ] Base enemy movement logic
   - [x] Random movement pattern
   - [ ] Movement pattern based on player's position
-- [ ] Large puck logic (points, make enemies vulnerable, alter enemy logic)
+- [x] Large puck logic (points, make enemies vulnerable, alter enemy logic)
 - [ ] Respawn points
+  - [x] Enemy respawn after being eaten
+  - [ ] Player respawn after being touched by enemy

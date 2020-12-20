@@ -4,16 +4,13 @@ import (
 	"./engine"
 	"./mm_render"
 	"./util"
+	"flag"
 	"fmt"
 	"github.com/eiannone/keyboard"
 	"math/rand"
 	"os"
-
-	//"strconv"
 	"strings"
 	"time"
-	//"gopkg.in/yaml.v2"
-	"flag"
 )
 
 type player struct {
@@ -22,8 +19,18 @@ type player struct {
 	engine.Actor
 }
 
+type Mode int
+
+const (
+	Hunt Mode = iota
+	Scared
+	Dead
+)
+
 type enemy struct {
-	direction engine.Direction
+	direction  engine.Direction
+	mode       Mode
+	changeMode chan Mode
 	engine.Actor
 }
 
@@ -42,10 +49,12 @@ var cli = true
 var preBeginWrap string
 var preEndWrap string
 
+var changeMode chan Mode
+
 func main() {
 	mmUser := flag.String("user", "", "The user to receive the DM of the game")
 	mmChannel := flag.String("channel", "", "The channel to receive the game message")
-	mmPreformatted := flag.Bool("pre", true, "Whether to wrap each frame in backticks (```\n<frame\n```)")
+	mmPreformatted := flag.Bool("pre", true, "Whether to wrap each frame in backticks to be rendered as preformatted text on Mattermost.")
 	flag.Parse()
 
 	if *mmUser != "" && *mmChannel != "" {
@@ -110,32 +119,36 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create player
 	playerX := (gameData.Actors["player"].Data["spawnX"]).(int)
 	playerY := (gameData.Actors["player"].Data["spawnY"]).(int)
 	playerActor := engine.Actor{ASCII: gameData.Actors["player"].ASCII, X: int8(playerX), Y: int8(playerY)}
 	player1 := player{3, 0, playerActor}
 	gameMap.AddActor(player1.Actor)
 
+	// Create slice full of enemies, from count in yaml file
+	enemyCount := (gameData.Actors["enemy"].Data["enemyAmt"]).(int)
+	enemies := make([]enemy, 0, enemyCount)
 	enemyX := (gameData.Actors["enemy"].Data["spawnX"]).(int)
 	enemyY := (gameData.Actors["enemy"].Data["spawnY"]).(int)
-	enemyActor1 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY)}
-	enemy1 := enemy{engine.Up, enemyActor1}
-	gameMap.AddActor(enemy1.Actor)
 
-	enemyActor2 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY + 1)}
-	enemy2 := enemy{engine.Up, enemyActor2}
-	gameMap.AddActor(enemy2.Actor)
-
-	enemyActor3 := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY + 2)}
-	enemy3 := enemy{engine.Up, enemyActor3}
-	gameMap.AddActor(enemy3.Actor)
-
+	for i := 0; i < cap(enemies); i++ {
+		changeMode := make(chan Mode)
+		enemyActor := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY - 1 + i)}
+		enemy := enemy{engine.Up, Hunt, changeMode, enemyActor}
+		gameMap.AddActor(enemy.Actor)
+		enemies = append(enemies, enemy)
+	}
 	rand.Seed(time.Now().Unix())
 
 	// this channel gets data passed to it when movement occurs.
 	// Collision detection only happens when data is pulled off the channel,
 	// preventing more than one collision from happening at once.
 	movement := make(chan engine.Coord)
+
+	// changeMode gets passed data in cases when collision with something
+	// causes a non-specified amount of enemies to have their states altered.
+	changeMode = make(chan Mode)
 
 	var exit = false
 	go func() {
@@ -148,21 +161,25 @@ func main() {
 			case 'w', 'W':
 				if validateMove(&gameMap, &(player1.Actor), engine.Up) {
 					movement <- engine.Coord{player1.X, player1.Y}
+					time.Sleep(60 * time.Millisecond)
 				}
 				break
 			case 'a', 'A':
 				if validateMove(&gameMap, &(player1.Actor), engine.Left) {
 					movement <- engine.Coord{player1.X, player1.Y}
+					time.Sleep(60 * time.Millisecond)
 				}
 				break
 			case 's', 'S':
 				if validateMove(&gameMap, &(player1.Actor), engine.Down) {
 					movement <- engine.Coord{player1.X, player1.Y}
+					time.Sleep(60 * time.Millisecond)
 				}
 				break
 			case 'd', 'D':
 				if validateMove(&gameMap, &(player1.Actor), engine.Right) {
 					movement <- engine.Coord{player1.X, player1.Y}
+					time.Sleep(60 * time.Millisecond)
 				}
 				break
 			case 'p', 'P':
@@ -188,30 +205,65 @@ func main() {
 		}
 	}()
 
-	// Rudimentary enemy movement. All random.
-	go func() {
-		for {
-			enemyMoveRandom(gameMap, &enemy1)
-			movement <- engine.Coord{enemy1.X, enemy1.Y}
-			time.Sleep(240 * time.Millisecond)
-		}
-	}()
+	// Rudimentary, random enemy movement. Quickens up their pace
+	// a bit when in Scared mode.
+	for i := 0; i < len(enemies); i++ {
+		go func(i int, enemies []enemy) {
+			for {
+				if enemies[i].mode == Scared {
+					go func() {
+						time.Sleep(8000 * time.Millisecond)
+						enemies[i].changeMode <- Hunt
+					}()
+					enemyMoveRandom(gameMap, &enemies[i])
+					movement <- engine.Coord{enemies[i].X, enemies[i].Y}
+					time.Sleep(time.Duration(180+10*i) * time.Millisecond)
+				} else if enemies[i].mode == Hunt {
+					enemyMoveRandom(gameMap, &enemies[i])
+					movement <- engine.Coord{enemies[i].X, enemies[i].Y}
+					time.Sleep(time.Duration(240+10*i) * time.Millisecond)
+				}
+			}
+		}(i, enemies)
 
-	// Rudimentary enemy movement. All random.
-	go func() {
-		for {
-			enemyMoveRandom(gameMap, &enemy2)
-			movement <- engine.Coord{enemy2.X, enemy2.Y}
-			time.Sleep(250 * time.Millisecond)
-		}
-	}()
+	}
 
-	// Rudimentary enemy movement. All random.
+	// Handle enemy mode changes on a per-enemy basis
+	for i := 0; i < len(enemies); i++ {
+		go func(i int, enemies []enemy, gameMap *engine.GameMap) {
+			for {
+				newMode := <-enemies[i].changeMode
+				enemies[i].mode = newMode
+
+				if newMode == Scared {
+					enemies[i].ASCII = gameData.Actors["enemy"].Data["scared"].(string)
+				} else if newMode == Hunt {
+					enemies[i].ASCII = gameData.Actors["enemy"].ASCII
+				} else if newMode == Dead {
+					enemies[i].ASCII = gameData.Actors["enemy"].Data["dead"].(string)
+					warpActor(&enemies[i].Actor, int8(enemyX), int8(enemyY), gameMap)
+				}
+			}
+		}(i, enemies, &gameMap)
+	}
+
+	// a more global changeMode channel will disperse generic mode changes to either
+	// individual or batches of enemies. Needed for use in collision detection to skirt
+	// around the fact that collision() takes in an Actor, not an Enemy.
 	go func() {
 		for {
-			enemyMoveRandom(gameMap, &enemy3)
-			movement <- engine.Coord{enemy3.X, enemy3.Y}
-			time.Sleep(260 * time.Millisecond)
+			newMode := <-changeMode
+			if newMode == Dead {
+				for i := 0; i < len(enemies); i++ {
+					if enemies[i].X == player1.X && enemies[i].Y == player1.Y {
+						enemies[i].changeMode <- newMode
+					}
+				}
+			} else {
+				for i := 0; i < len(enemies); i++ {
+					enemies[i].changeMode <- newMode
+				}
+			}
 		}
 	}()
 
@@ -233,7 +285,7 @@ func main() {
 	for !exit {
 		if !paused {
 			if cli {
-				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", gameMap, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\x1b[2G\x1b[27A", gameMap, player1.Hud())
 			} else {
 				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameMap, player1.Hud(), preEndWrap))
 			}
@@ -244,7 +296,7 @@ func main() {
 			pausedFrame := engine.OverlayMessage(gameMap.String(), pausedString, x, y)
 
 			if cli {
-				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[28A", pausedFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[27A", pausedFrame, player1.Hud())
 			} else {
 				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
 			}
@@ -258,7 +310,7 @@ func main() {
 			gameOverFrame := engine.OverlayMessage(gameMap.String(), gameOverString, x, y)
 
 			if cli {
-				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n", gameOverFrame, player1.Hud(), actorsOnTile(player1.X, player1.Y, &gameMap))
+				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\n", gameOverFrame, player1.Hud())
 			} else {
 				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
 			}
@@ -268,29 +320,21 @@ func main() {
 	}
 }
 
-// actorsOnTile is a soon-to-be deprecated function meant only for use while
-// debugging. It prints in sequence all actors located on the selected Tile.
-func actorsOnTile(x int8, y int8, gm *engine.GameMap) string {
-	builder := strings.Builder{}
-	l := len((*gm)[y][x].Actors)
-
-	builder.WriteString("Actors on tile: [")
-	if l > 0 {
-		for x, a := range (*gm)[y][x].Actors {
-			builder.WriteString(fmt.Sprintf("'%s'", a.String()))
-			if x != l-1 {
-				builder.WriteString(", ")
-			}
-		}
-	}
-	builder.WriteString("]")
-
-	return builder.String()
-}
-
 // togglePaused toggles the game's paused state.
 func togglePaused() {
 	paused = !paused
+}
+
+func warpActor(a *engine.Actor, destX int8, destY int8, gm *engine.GameMap) bool {
+	var startX int8 = a.X
+	var startY int8 = a.Y
+	if passable, ok := (*gm)[destY][destX].Data["passable"]; ok && passable.(bool) {
+		a.SetCoords(destX, destY)
+		gm.AddActor(*a)
+		(*gm)[startY][startX].Actors = (*gm)[startY][startX].Actors[1:]
+		return true
+	}
+	return false
 }
 
 // validateMove moves an actor  within the board, handling obstacles and
@@ -300,9 +344,6 @@ func validateMove(gm *engine.GameMap, a *engine.Actor, dir engine.Direction) boo
 	if paused {
 		return false
 	}
-
-	var startX int8 = a.X
-	var startY int8 = a.Y
 
 	var destX int8 = a.X
 	var destY int8 = a.Y
@@ -331,19 +372,14 @@ func validateMove(gm *engine.GameMap, a *engine.Actor, dir engine.Direction) boo
 		destX = newCoord.X
 		destY = newCoord.Y
 	}
-	if passable, ok := (*gm)[destY][destX].Data["passable"]; ok && passable.(bool) {
-		a.SetCoords(destX, destY)
-		gm.AddActor(*a)
-		(*gm)[startY][startX].Actors = (*gm)[startY][startX].Actors[1:]
-		return true
-	}
-	return false
+
+	return warpActor(a, destX, destY, gm)
 }
 
 // enemyMoveRandom is a helper function to validate a random movement
 // for an enemy, changing directions if it hits a wall.
 func enemyMoveRandom(gm engine.GameMap, e *enemy) {
-	if e.X == 11 && e.Y == 8 {
+	if e.X == 11 && (e.Y == 8 || e.Y == 9) {
 		e.direction = engine.Up
 		validateMove(&gm, &(e.Actor), e.direction)
 		return
@@ -360,14 +396,23 @@ func enemyMoveRandom(gm engine.GameMap, e *enemy) {
 // another actor.
 func (p *player) collision(a *engine.Actor) {
 	switch a.ASCII {
-	case gameData.Actors["dot"].ASCII, gameData.Actors["puck"].ASCII:
+	case gameData.Actors["dot"].ASCII:
 		p.score += a.Data["score"].(int)
 		a.ASCII = "" // This is grounds for actor deletion in the KeepOnTop() routine
+		break
+	case gameData.Actors["puck"].ASCII:
+		p.score += a.Data["score"].(int)
+		a.ASCII = "" // This is grounds for actor deletion in the KeepOnTop() routine
+		changeMode <- Scared
 		break
 	case gameData.Actors["enemy"].ASCII:
 		if p.lives > 0 {
 			p.lives--
 		}
+		break
+	case gameData.Actors["enemy"].Data["scared"].(string):
+		p.score += 250
+		changeMode <- Dead
 		break
 	}
 }
