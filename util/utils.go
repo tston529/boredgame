@@ -1,4 +1,4 @@
-package engine/util
+package engine
 
 import "fmt"
 
