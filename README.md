@@ -3,9 +3,69 @@ ASCII game engine whose board state will be rendered through calls to the Matter
 
 NOTE: Requires Go v1.13 or above, there's specific error handling in the Mattermost api package that was only released starting in that version.
 
-Demo included -> currently called `mm_game.go`, it's basically a half-baked Pac-Man clone.
-There's a bunch to learn from it though, including what I'd consider boilerplate code for getting a game to render on mattermost:
+installing: 
+`go get -u github.com/tston529/mattermost-game-engine`
+
+To run on mattermost, define a \*.yaml file with the structure:
+```yaml
+user: "<username>"
+pass: "<password>"
+serverurl: "<mattermost server url>"
+teamname: "<mattermost team>"
+```
+
+game data is also a yaml file, in the structure:
+```yaml
+---
+map:
+  filename: "path/to/map/file.txt"
+  data:
+    x: !!int # width of map
+    y: !!int # height of map
+    # more custom game-specific data is allowed here if desired
+tiles:
+  tile_name_1:
+    ascii: !!str
+    data:
+      # optional; custom game-specific data goes here
+  ...
+  tile_name_n:
+    ascii: !!str
+    data:
+      # optional; custom game-specific data goes here
+actors:
+  actor_name_1:
+    ascii: !!str
+    data:
+      # optional; custom game-specific data goes here
+  ...
+  actor_name_n:
+    ascii: !!str
+    data:
+      # optional; custom game-specific data goes here
+
+# only necessary for emoji-based games, this defines tilesets used in message boxes.
+# However, all are mandatory if emoji-based message boxes are desired.
+message: 
+  blank: !!str # used for filling in blank space.
+  msg_vert: !!str # vertical edge of box
+  msg_horiz: !!str # horizontal edge of box
+  corner: !!str # corner of box (emoji equivalent of ascii art '+')
+
+  # message will be rendered using emoji as well, make sure they
+  # are labeled consistently (e.g. ":scrabble_a:, :scrabble_b:, :scrabble_c:, etc.")
+  alpha_prefix: !!str 
+```
+
+Boilerplate code for getting a game to render on mattermost:
 ```go
+import (
+  "github.com/tston529/mattermost-game-engine" // invoke methods from `engine`
+  "github.com/tston529/mattermost-game-engine/mmrender" // invoke methods from `mmrender`
+
+  // this is less-important, util is a subpackage for dumping helper functions not directly related to the engine
+  // "github.com/tston529/mattermost-game-engine/util" // invoke methods from `util`
+)
 // Handle command line args, namely destination channel or user. The rest of the mattermost 
 // credentials (username, password, url, team) are set in a yaml file read in a call to
 // `LoadMattermostData(filename string) MattermostData`.
@@ -26,13 +86,15 @@ if *mmUser != "" && *mmChannel != "" {
     os.Exit(1)
 }
 
+// determines what rendering strategy to use (`cli` uses escape sequences to smoothly update each frame)
+var cli bool
 if *mmUser != "" || *mmChannel != "" {
     cli = false
 }
 
 if !cli {
     if *mmPreformatted {
-        preBeginWrap = "```\n" // Until I care enough to write better code, I defined these as globals.
+        preBeginWrap = "```\n" // Until I care enough to write better code, I defined these as globals in my tests.
         preEndWrap = "\n```"
     } else {
         preBeginWrap = ""
@@ -75,33 +137,3 @@ for !exit {
     time.Sleep(100 * time.Millisecond)
 }
 ```
-
-
-TODO:
-### Engine
-- [x] Make every board state exportable as a single string, such that it would be rendered the same in Notepad.exe as it would in a terminal.
-  - [x] Render board tiles as single string
-  - [x] Remove the need for escape sequences
-    - [x] Move message box generator out of game logic and into engine
-    - [x] Message box should be inserted into and rendered as part of current frame
-    - [x] Separate the mattermost renderer from the cli renderer (which may still use escape sequences)
-- [x] Move wall handling out from engine to game logic - not every ascii game will have the need for walls/impassable/passable tile separation
-  - [x] Game tile/actor metadata stored in yaml file under a "Data" section allowing for game-side extensibility. This include the pacman "passable tile" trait.
-- [x] Mattermost support
-  - [x] Ensure logging in/basic rendering works
-  - [x] Mattermost credentials via yaml file
-  - [x] Move all mattermost handling into mattermost renderer package
-  - [x] Handle Channels
-  - [x] Handle Direct Messages
-- [ ] Proper Go package handling
-
-###  Demo Pac-Man clone
-- [ ] Player movement should happen automatically, arrow keys should only be used for changing directions
-- [x] Slow down player movement
-- [ ] Base enemy movement logic
-  - [x] Random movement pattern
-  - [ ] Movement pattern based on player's position
-- [x] Large puck logic (points, make enemies vulnerable, alter enemy logic)
-- [ ] Respawn points
-  - [x] Enemy respawn after being eaten
-  - [ ] Player respawn after being touched by enemy
