@@ -1,0 +1,60 @@
+--- 
+map: 
+  filename: "maps/wall_data_map.txt"
+  data:
+    x: 23
+    y: 23
+tiles:
+  wall_1:
+    ascii: ":pm_wall_horiz:"
+    data:
+      passable: false
+  wall_2:
+    ascii: ":pm_island_l:"
+    data:
+      passable: false
+  wall_3:
+    ascii: ":pm_island_r:"
+    data:
+      passable: false
+  wall_4:
+    ascii: ":pm_wall_horiz:"
+    data:
+      passable: false
+  wall_5:
+    ascii: ":pm_wall_vert:"
+    data:
+      passable: false
+  wall_6:
+    ascii: ":pm_wall_t:"
+    data:
+      passable: false
+  blank:
+    ascii: ":black_square:"
+    data:
+      passable: true
+actors:
+  dot:
+    ascii: ":pm_dot:"
+    data:
+      score: 10
+  puck:
+    ascii: ":pm_puck:"
+    data:
+      score: 50
+  player:
+    ascii: ":pacman:"
+    data:
+      lives: 3
+      spawnX: 11
+      spawnY: 12
+      passable: false
+  enemy:
+    ascii: ":the_lucas:"
+    data:
+      spawnX: 11
+      spawnY: 9
+      passable: true
+      scared: ":the_eirc:"
+      dead: ":triggered:"
+      enemyAmt: 3

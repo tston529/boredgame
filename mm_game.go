@@ -1,16 +1,17 @@
 package main
 
 import (
-	"./engine"
-	"./mm_render"
-	"./util"
 	"flag"
 	"fmt"
-	"github.com/eiannone/keyboard"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
+
+	"./engine"
+	"./mmrender"
+	"./util"
+	"github.com/eiannone/keyboard"
 )
 
 type player struct {
@@ -19,18 +20,18 @@ type player struct {
 	engine.Actor
 }
 
-type Mode int
+type enemyState int
 
 const (
-	Hunt Mode = iota
-	Scared
-	Dead
+	hunt enemyState = iota
+	scared
+	dead
 )
 
 type enemy struct {
-	direction  engine.Direction
-	mode       Mode
-	changeMode chan Mode
+	direction        engine.Direction
+	state            enemyState
+	changeEnemyState chan enemyState
 	engine.Actor
 }
 
@@ -49,7 +50,7 @@ var cli = true
 var preBeginWrap string
 var preEndWrap string
 
-var changeMode chan Mode
+var changeEnemyState chan enemyState
 
 func main() {
 	mmUser := flag.String("user", "", "The user to receive the DM of the game")
@@ -74,20 +75,20 @@ func main() {
 			preBeginWrap = ""
 			preEndWrap = ""
 		}
-		mmData := mm_render.LoadMattermostData("./tests/mattermost.yml")
+		mmData := mmrender.LoadMattermostData("./tests/mattermost.yml")
 
-		mm_render.StartMattermostClient(mmData.ServerUrl, mmData.User, mmData.Pass)
+		mmrender.StartMattermostClient(mmData.ServerURL, mmData.User, mmData.Pass)
 		if *mmUser != "" {
-			mm_render.GetDirectMessageChannel(*mmUser)
+			mmrender.GetDirectMessageChannel(*mmUser)
 		} else if *mmChannel != "" {
-			mm_render.FindTeam(mmData.TeamName)
-			mm_render.GetChannel(*mmChannel)
+			mmrender.FindTeam(mmData.TeamName)
+			mmrender.GetChannel(*mmChannel)
 		}
 
-		mm_render.PostMessage("Gamu Starto desu")
+		mmrender.PostMessage("Gamu Starto desu")
 	}
 
-	gameData = engine.LoadGameData("./tests/testyaml.yml")
+	gameData = engine.LoadGameData("./tests/asciiyaml.yml")
 
 	if err := keyboard.Open(); err != nil {
 		panic(err)
@@ -133,9 +134,9 @@ func main() {
 	enemyY := (gameData.Actors["enemy"].Data["spawnY"]).(int)
 
 	for i := 0; i < cap(enemies); i++ {
-		changeMode := make(chan Mode)
+		changeEnemyState := make(chan enemyState)
 		enemyActor := engine.Actor{ASCII: gameData.Actors["enemy"].ASCII, X: int8(enemyX), Y: int8(enemyY - 1 + i)}
-		enemy := enemy{engine.Up, Hunt, changeMode, enemyActor}
+		enemy := enemy{engine.Up, hunt, changeEnemyState, enemyActor}
 		gameMap.AddActor(enemy.Actor)
 		enemies = append(enemies, enemy)
 	}
@@ -146,9 +147,9 @@ func main() {
 	// preventing more than one collision from happening at once.
 	movement := make(chan engine.Coord)
 
-	// changeMode gets passed data in cases when collision with something
+	// changeEnemyState gets passed data in cases when collision with something
 	// causes a non-specified amount of enemies to have their states altered.
-	changeMode = make(chan Mode)
+	changeEnemyState = make(chan enemyState)
 
 	var exit = false
 	go func() {
@@ -160,25 +161,25 @@ func main() {
 			switch char {
 			case 'w', 'W':
 				if validateMove(&gameMap, &(player1.Actor), engine.Up) {
-					movement <- engine.Coord{player1.X, player1.Y}
+					movement <- engine.Coord{X: player1.X, Y: player1.Y}
 					time.Sleep(60 * time.Millisecond)
 				}
 				break
 			case 'a', 'A':
 				if validateMove(&gameMap, &(player1.Actor), engine.Left) {
-					movement <- engine.Coord{player1.X, player1.Y}
+					movement <- engine.Coord{X: player1.X, Y: player1.Y}
 					time.Sleep(60 * time.Millisecond)
 				}
 				break
 			case 's', 'S':
 				if validateMove(&gameMap, &(player1.Actor), engine.Down) {
-					movement <- engine.Coord{player1.X, player1.Y}
+					movement <- engine.Coord{X: player1.X, Y: player1.Y}
 					time.Sleep(60 * time.Millisecond)
 				}
 				break
 			case 'd', 'D':
 				if validateMove(&gameMap, &(player1.Actor), engine.Right) {
-					movement <- engine.Coord{player1.X, player1.Y}
+					movement <- engine.Coord{X: player1.X, Y: player1.Y}
 					time.Sleep(60 * time.Millisecond)
 				}
 				break
@@ -206,21 +207,21 @@ func main() {
 	}()
 
 	// Rudimentary, random enemy movement. Quickens up their pace
-	// a bit when in Scared mode.
+	// a bit when in scared state.
 	for i := 0; i < len(enemies); i++ {
 		go func(i int, enemies []enemy) {
 			for {
-				if enemies[i].mode == Scared {
+				if enemies[i].state == scared {
 					go func() {
 						time.Sleep(8000 * time.Millisecond)
-						enemies[i].changeMode <- Hunt
+						enemies[i].changeEnemyState <- hunt
 					}()
 					enemyMoveRandom(gameMap, &enemies[i])
-					movement <- engine.Coord{enemies[i].X, enemies[i].Y}
+					movement <- engine.Coord{X: enemies[i].X, Y: enemies[i].Y}
 					time.Sleep(time.Duration(180+10*i) * time.Millisecond)
-				} else if enemies[i].mode == Hunt {
+				} else if enemies[i].state == hunt {
 					enemyMoveRandom(gameMap, &enemies[i])
-					movement <- engine.Coord{enemies[i].X, enemies[i].Y}
+					movement <- engine.Coord{X: enemies[i].X, Y: enemies[i].Y}
 					time.Sleep(time.Duration(240+10*i) * time.Millisecond)
 				}
 			}
@@ -228,18 +229,18 @@ func main() {
 
 	}
 
-	// Handle enemy mode changes on a per-enemy basis
+	// Handle enemy state changes on a per-enemy basis
 	for i := 0; i < len(enemies); i++ {
 		go func(i int, enemies []enemy, gameMap *engine.GameMap) {
 			for {
-				newMode := <-enemies[i].changeMode
-				enemies[i].mode = newMode
+				newEnemyState := <-enemies[i].changeEnemyState
+				enemies[i].state = newEnemyState
 
-				if newMode == Scared {
+				if newEnemyState == scared {
 					enemies[i].ASCII = gameData.Actors["enemy"].Data["scared"].(string)
-				} else if newMode == Hunt {
+				} else if newEnemyState == hunt {
 					enemies[i].ASCII = gameData.Actors["enemy"].ASCII
-				} else if newMode == Dead {
+				} else if newEnemyState == dead {
 					enemies[i].ASCII = gameData.Actors["enemy"].Data["dead"].(string)
 					warpActor(&enemies[i].Actor, int8(enemyX), int8(enemyY), gameMap)
 				}
@@ -247,21 +248,21 @@ func main() {
 		}(i, enemies, &gameMap)
 	}
 
-	// a more global changeMode channel will disperse generic mode changes to either
+	// a more global changeEnemyState channel will disperse generic state changes to either
 	// individual or batches of enemies. Needed for use in collision detection to skirt
 	// around the fact that collision() takes in an Actor, not an Enemy.
 	go func() {
 		for {
-			newMode := <-changeMode
-			if newMode == Dead {
+			newEnemyState := <-changeEnemyState
+			if newEnemyState == dead {
 				for i := 0; i < len(enemies); i++ {
 					if enemies[i].X == player1.X && enemies[i].Y == player1.Y {
-						enemies[i].changeMode <- newMode
+						enemies[i].changeEnemyState <- newEnemyState
 					}
 				}
 			} else {
 				for i := 0; i < len(enemies); i++ {
-					enemies[i].changeMode <- newMode
+					enemies[i].changeEnemyState <- newEnemyState
 				}
 			}
 		}
@@ -287,7 +288,7 @@ func main() {
 			if cli {
 				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\x1b[2G\x1b[27A", gameMap, player1.Hud())
 			} else {
-				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameMap, player1.Hud(), preEndWrap))
+				mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameMap, player1.Hud(), preEndWrap))
 			}
 			time.Sleep(100 * time.Millisecond)
 		} else {
@@ -296,9 +297,9 @@ func main() {
 			pausedFrame := engine.OverlayMessage(gameMap.String(), pausedString, x, y)
 
 			if cli {
-				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K%s\n\x1b[2G\x1b[27A", pausedFrame, player1.Hud())
+				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\n\x1b[2G\x1b[27A", pausedFrame, player1.Hud())
 			} else {
-				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
+				mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
 			}
 			for paused {
 				time.Sleep(100 * time.Millisecond)
@@ -312,7 +313,7 @@ func main() {
 			if cli {
 				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\n", gameOverFrame, player1.Hud())
 			} else {
-				mm_render.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
+				mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
 			}
 
 			os.Exit(0)
@@ -403,7 +404,7 @@ func (p *player) collision(a *engine.Actor) {
 	case gameData.Actors["puck"].ASCII:
 		p.score += a.Data["score"].(int)
 		a.ASCII = "" // This is grounds for actor deletion in the KeepOnTop() routine
-		changeMode <- Scared
+		changeEnemyState <- scared
 		break
 	case gameData.Actors["enemy"].ASCII:
 		if p.lives > 0 {
@@ -412,7 +413,7 @@ func (p *player) collision(a *engine.Actor) {
 		break
 	case gameData.Actors["enemy"].Data["scared"].(string):
 		p.score += 250
-		changeMode <- Dead
+		changeEnemyState <- dead
 		break
 	}
 }
