@@ -1,10 +1,10 @@
-# mattermost-game-engine
+# boredgame
 ASCII game engine whose board state will be rendered through calls to the Mattermost API
 
 NOTE: Requires Go v1.13 or above, there's specific error handling in the Mattermost api package that was only released starting in that version.
 
 installing: 
-`go get -u github.com/tston529/mattermost-game-engine`
+`go get -u github.com/tston529/boredgame`
 
 To run on mattermost, define a \*.yaml file with the structure:
 ```yaml
@@ -60,11 +60,11 @@ message:
 Boilerplate code for getting a game to render on mattermost:
 ```go
 import (
-  "github.com/tston529/mattermost-game-engine" // invoke methods from `engine`
-  "github.com/tston529/mattermost-game-engine/mmrender" // invoke methods from `mmrender`
+  "github.com/tston529/boredgame" // invoke methods from `engine`
+  "github.com/tston529/boredgame/mmrender" // invoke methods from `mmrender`
 
   // this is less-important, util is a subpackage for dumping helper functions not directly related to the engine
-  // "github.com/tston529/mattermost-game-engine/util" // invoke methods from `util`
+  // "github.com/tston529/boredgame/util" // invoke methods from `util`
 )
 // Handle command line args, namely destination channel or user. The rest of the mattermost 
 // credentials (username, password, url, team) are set in a yaml file read in a call to

@@ -1,4 +1,4 @@
-package engine
+package boredgame
 
 // Direction is a simple type to help abstract cardinal directions as an enum.
 type Direction int8
