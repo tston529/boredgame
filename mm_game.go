@@ -88,7 +88,7 @@ func main() {
 		mmrender.PostMessage("Gamu Starto desu")
 	}
 
-	gameData = engine.LoadGameData("./tests/asciiyaml.yml")
+	gameData = engine.LoadGameData("./tests/testyaml.yml")
 
 	if err := keyboard.Open(); err != nil {
 		panic(err)
@@ -113,7 +113,11 @@ func main() {
 	if cli {
 		pausedString, err = engine.CreateAsciiMessage("paused", len("paused")+4)
 	} else {
-		pausedString, err = engine.CreateEmojiMessage("paused", len("paused")+4, gameData.Message)
+		if *mmPreformatted {
+			pausedString, err = engine.CreateAsciiMessage("paused", len("paused")+4)
+		} else {
+			pausedString, err = engine.CreateEmojiMessage("paused", len("paused")+4, gameData.Message)
+		}
 	}
 	if err != nil {
 		fmt.Printf("error: %s\n", err)
@@ -122,7 +126,11 @@ func main() {
 	if cli {
 		gameOverString, err = engine.CreateAsciiMessage("game over", len("game over")+4)
 	} else {
-		gameOverString, err = engine.CreateEmojiMessage("game over", len("game over")+4, gameData.Message)
+		if *mmPreformatted {
+			gameOverString, err = engine.CreateAsciiMessage("game over", len("game over")+4)
+		} else {
+			gameOverString, err = engine.CreateEmojiMessage("game over", len("game over")+4, gameData.Message)
+		}
 	}
 	if err != nil {
 		fmt.Printf("error: %s\n", err)
@@ -308,9 +316,15 @@ func main() {
 				pausedFrame := engine.OverlayAsciiMessage(gameMap.String(), pausedString, x, y)
 				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\n\x1b[2G\x1b[27A", pausedFrame, player1.Hud())
 			} else {
-				x := int((width-len(strings.Split(strings.Split(pausedString, "\n")[0], "::")))/2) + 1
-				pausedFrame := engine.OverlayEmojiMessage(gameMap.String(), pausedString, x, y, "::")
-				mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
+				if *mmPreformatted {
+					x := int((width-len(strings.Split(pausedString, "\n")[0]))/2) + 1
+					pausedFrame := engine.OverlayAsciiMessage(gameMap.String(), pausedString, x, y)
+					mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
+				} else {
+					x := int((width-len(strings.Split(strings.Split(pausedString, "\n")[0], "::")))/2) + 1
+					pausedFrame := engine.OverlayEmojiMessage(gameMap.String(), pausedString, x, y, "::")
+					mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
+				}
 			}
 			for paused {
 				time.Sleep(100 * time.Millisecond)
@@ -324,9 +338,15 @@ func main() {
 				gameOverFrame := engine.OverlayAsciiMessage(gameMap.String(), gameOverString, x, y)
 				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\n", gameOverFrame, player1.Hud())
 			} else {
-				x := int((width-len(strings.Split(strings.Split(gameOverString, "\n")[0], "::")))/2) + 1
-				gameOverFrame := engine.OverlayEmojiMessage(gameMap.String(), gameOverString, x, y, "::")
-				mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
+				if *mmPreformatted {
+					x := int((width-len(strings.Split(gameOverString, "\n")[0]))/2) + 1
+					gameOverFrame := engine.OverlayAsciiMessage(gameMap.String(), gameOverString, x, y)
+					mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
+				} else {
+					x := int((width-len(strings.Split(strings.Split(gameOverString, "\n")[0], "::")))/2) + 1
+					gameOverFrame := engine.OverlayEmojiMessage(gameMap.String(), gameOverString, x, y, "::")
+					mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
+				}
 			}
 
 			os.Exit(0)
