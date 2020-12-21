@@ -1,4 +1,4 @@
-package mmrender
+package engine/mmrender
 
 import (
 	"fmt"

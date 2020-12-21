@@ -57,7 +57,7 @@ actors:
       passable: true
       scared: ":the_eirc:"
       dead: ":triggered:"
-      enemyAmt: 3
+      enemyAmt: 4
 message:
   blank: ":black_square:"
   msg_vert: ":pm_wall_vert:"

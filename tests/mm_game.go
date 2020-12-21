@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"./engine"
-	"./mmrender"
-	"./util"
+	"github.com/tston529/mattermost-game-engine"
 	"github.com/eiannone/keyboard"
 )
 
@@ -56,10 +54,16 @@ func main() {
 	mmUser := flag.String("user", "", "The user to receive the DM of the game")
 	mmChannel := flag.String("channel", "", "The channel to receive the game message")
 	mmPreformatted := flag.Bool("pre", true, "Whether to wrap each frame in backticks to be rendered as preformatted text on Mattermost.")
+	mmDatafile := flag.String("game", "", "The yaml file holding the game metadata")
 	flag.Parse()
 
+	if *mmDatafile == "" {
+		fmt.Println("error: need a game data file (`--game=/path/to/file.yml`)")
+		os.Exit(1)
+	}
+
 	if *mmUser != "" && *mmChannel != "" {
-		fmt.Println("Can't specify both user and channel, choose one or the other.")
+		fmt.Println("error: can't specify both user and channel, choose one or the other")
 		os.Exit(1)
 	}
 
@@ -75,7 +79,7 @@ func main() {
 			preBeginWrap = ""
 			preEndWrap = ""
 		}
-		mmData := mmrender.LoadMattermostData("./tests/mattermost.yml")
+		mmData := mmrender.LoadMattermostData("mattermost.yml")
 
 		mmrender.StartMattermostClient(mmData.ServerURL, mmData.User, mmData.Pass)
 		if *mmUser != "" {
@@ -88,7 +92,7 @@ func main() {
 		mmrender.PostMessage("Gamu Starto desu")
 	}
 
-	gameData = engine.LoadGameData("./tests/testyaml.yml")
+	gameData = engine.LoadGameData(*mmDatafile)
 
 	if err := keyboard.Open(); err != nil {
 		panic(err)
@@ -111,10 +115,10 @@ func main() {
 	var pausedString string
 	var gameOverString string
 	if cli {
-		pausedString, err = engine.CreateAsciiMessage("paused", len("paused")+4)
+		pausedString, err = engine.CreateAsciiMessage("PAUSED", len("PAUSED")+4)
 	} else {
 		if *mmPreformatted {
-			pausedString, err = engine.CreateAsciiMessage("paused", len("paused")+4)
+			pausedString, err = engine.CreateAsciiMessage("PAUSED", len("PAUSED")+4)
 		} else {
 			pausedString, err = engine.CreateEmojiMessage("paused", len("paused")+4, gameData.Message)
 		}
@@ -124,10 +128,10 @@ func main() {
 		os.Exit(1)
 	}
 	if cli {
-		gameOverString, err = engine.CreateAsciiMessage("game over", len("game over")+4)
+		gameOverString, err = engine.CreateAsciiMessage("GAME OVER", len("GAME OVER")+4)
 	} else {
 		if *mmPreformatted {
-			gameOverString, err = engine.CreateAsciiMessage("game over", len("game over")+4)
+			gameOverString, err = engine.CreateAsciiMessage("GAME OVER", len("GAME OVER")+4)
 		} else {
 			gameOverString, err = engine.CreateEmojiMessage("game over", len("game over")+4, gameData.Message)
 		}
