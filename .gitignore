@@ -6,6 +6,8 @@
 *.dylib
 mm_game
 
+*mattermost.yml
+
 # Test binary, built with `go test -c`
 *.test
 

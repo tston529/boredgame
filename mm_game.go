@@ -108,13 +108,22 @@ func main() {
 	height = len(gameMap)
 
 	// Initialize pop-up message strings
-	pausedString, err := engine.CreateMessage("PAUSED", len("PAUSED")+4)
+	var pausedString string
+	var gameOverString string
+	if cli {
+		pausedString, err = engine.CreateAsciiMessage("paused", len("paused")+4)
+	} else {
+		pausedString, err = engine.CreateEmojiMessage("paused", len("paused")+4, gameData.Message)
+	}
 	if err != nil {
 		fmt.Printf("error: %s\n", err)
 		os.Exit(1)
 	}
-
-	gameOverString, err := engine.CreateMessage("GAME OVER", len("GAME OVER")+4)
+	if cli {
+		gameOverString, err = engine.CreateAsciiMessage("game over", len("game over")+4)
+	} else {
+		gameOverString, err = engine.CreateEmojiMessage("game over", len("game over")+4, gameData.Message)
+	}
 	if err != nil {
 		fmt.Printf("error: %s\n", err)
 		os.Exit(1)
@@ -293,12 +302,14 @@ func main() {
 			time.Sleep(100 * time.Millisecond)
 		} else {
 			y := int((height - 5) / 2)
-			x := int((width-len(strings.Split(pausedString, "\n")[0]))/2) + 1
-			pausedFrame := engine.OverlayMessage(gameMap.String(), pausedString, x, y)
 
 			if cli {
+				x := int((width-len(strings.Split(pausedString, "\n")[0]))/2) + 1
+				pausedFrame := engine.OverlayAsciiMessage(gameMap.String(), pausedString, x, y)
 				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\n\x1b[2G\x1b[27A", pausedFrame, player1.Hud())
 			} else {
+				x := int((width-len(strings.Split(strings.Split(pausedString, "\n")[0], "::")))/2) + 1
+				pausedFrame := engine.OverlayEmojiMessage(gameMap.String(), pausedString, x, y, "::")
 				mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, pausedFrame, player1.Hud(), preEndWrap))
 			}
 			for paused {
@@ -307,12 +318,14 @@ func main() {
 		}
 		if player1.lives == 0 {
 			y := int((height - 5) / 2)
-			x := int((width-len(strings.Split(gameOverString, "\n")[0]))/2) + 1
-			gameOverFrame := engine.OverlayMessage(gameMap.String(), gameOverString, x, y)
 
 			if cli {
+				x := int((width-len(strings.Split(gameOverString, "\n")[0]))/2) + 1
+				gameOverFrame := engine.OverlayAsciiMessage(gameMap.String(), gameOverString, x, y)
 				fmt.Printf("\x1b[0E\x1b7%s%s\x1b[K\n", gameOverFrame, player1.Hud())
 			} else {
+				x := int((width-len(strings.Split(strings.Split(gameOverString, "\n")[0], "::")))/2) + 1
+				gameOverFrame := engine.OverlayEmojiMessage(gameMap.String(), gameOverString, x, y, "::")
 				mmrender.SendNextFrame(fmt.Sprintf("%s%s%s%s", preBeginWrap, gameOverFrame, player1.Hud(), preEndWrap))
 			}
 

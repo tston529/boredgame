@@ -58,3 +58,9 @@ actors:
       scared: ":the_eirc:"
       dead: ":triggered:"
       enemyAmt: 3
+message:
+  blank: ":black_square:"
+  msg_vert: ":pm_wall_vert:"
+  msg_horiz: ":pm_wall_horiz:"
+  corner: ":pm_wall_t:"
+  alpha_prefix: "scrabble_"
