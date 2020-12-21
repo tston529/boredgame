@@ -3,10 +3,11 @@ package boredgame
 import (
 	"errors"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 type sz struct {
@@ -42,9 +43,9 @@ type MapData struct {
 // SceneData holds unmarshalled data from the game's yaml file,
 // including map, tile and actor metadata
 type SceneData struct {
-	Map    MapData
-	Tiles  map[string]TileData
-	Actors map[string]ActorData
+	Map     MapData
+	Tiles   map[string]TileData
+	Actors  map[string]ActorData
 	Message MessageData
 }
 
@@ -145,7 +146,7 @@ func CreateEmojiMessage(msg string, boxWidth int, messageData MessageData) (stri
 		builder.WriteString(messageData["blank"])
 	}
 
-	for x := range(msg) {
+	for x := range msg {
 		if msg[x] != ' ' {
 			builder.WriteString(fmt.Sprintf(":%s%s:", messageData["alpha_prefix"], string(msg[x])))
 		} else {
@@ -180,7 +181,6 @@ func OverlayAsciiMessage(base string, msg string, x int, y int) string {
 	}
 	return strings.Join(baseStrSlice, "\n")
 }
-
 
 // OverlayEmojiMessage inserts a message box into the current frame.
 // It returns the newly-built frame as a string.

@@ -51,3 +51,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 	honnef.co/go/tools v0.1.0 // indirect
 )
+
+replace engine => github.com/tston529/mattermost-game-engine v0.1.0
+replace github.com/tston529/mattermost-game-engine@v0.0.0-20201221170515-d9d2e454f7ed => github.com/tston529/mattermost-game-engine v0.1.0
