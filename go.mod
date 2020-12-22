@@ -41,3 +41,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
+
+replace engine => github.com/tston529/mattermost-game-engine v0.1.0
