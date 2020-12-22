@@ -1,4 +1,4 @@
-package engine
+package mattermost-game-engine
 
 import (
 	"errors"

@@ -1,4 +1,4 @@
-package engine
+package mattermost-game-engine
 
 // Direction is a simple type to help abstract cardinal directions as an enum.
 type Direction int8
