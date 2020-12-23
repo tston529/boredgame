@@ -1,0 +1,16 @@
+# appveyor.yml
+version: 1.0.{build}
+
+image: Ubuntu
+
+build_script:
+- sh: >-
+    go vet
+
+    go build
+clone_folder: /usr/go/src/github.com/$username/$project
+
+environment:
+  GOPATH: /usr/go/
+
+stack: go 1.13
