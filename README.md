@@ -1,5 +1,7 @@
 # boredgame
-ASCII game engine whose board state will be rendered through calls to the Mattermost API
+ASCII game engine whose board state will be rendered through calls to the Mattermost API  
+
+[![Build status](https://img.shields.io/appveyor/build/tston529/boredgame?style=for-the-badge)](https://ci.appveyor.com/project/tston529/boredgame/branch/main)
 
 NOTE: Requires Go v1.13 or above, there's specific error handling in the Mattermost api package that was only released starting in that version.
 
